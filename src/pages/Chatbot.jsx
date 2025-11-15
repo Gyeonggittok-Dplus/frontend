@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Send } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 
 const SUGGESTIONS = [
   "청년 맞춤 지원이 궁금해요",
@@ -8,11 +9,13 @@ const SUGGESTIONS = [
 ];
 
 export default function Chatbot() {
+  const { user } = useAuth();
   const [messages, setMessages] = useState([
     { sender: "bot", text: "안녕하세요, 경기D+ 챗봇입니다. 어떤 복지 혜택이 궁금하신가요?" },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [sessionId, setSessionId] = useState(null);
   const BASE_URL = import.meta.env.VITE_API_BASE_URL;
   const messageContainerRef = useRef(null);
 
@@ -20,22 +23,48 @@ export default function Chatbot() {
     const content = preset ?? input.trim();
     if (!content || loading) return;
 
+    if (!user?.email) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          sender: "bot",
+          text: "로그인 정보를 확인할 수 없습니다. 다시 로그인 후 이용해 주세요.",
+        },
+      ]);
+      return;
+    }
+
     setMessages((prev) => [...prev, { sender: "user", text: content }]);
     if (!preset) setInput("");
     setLoading(true);
 
     try {
-      const res = await fetch(`${BASE_URL}/api/chatbot/query`, {
+      const payload = {
+        message: content,
+        email: user.email,
+      };
+      if (sessionId) {
+        payload.session_id = sessionId;
+      }
+
+      const res = await fetch(`${BASE_URL}/api/chatbot/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: content }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
+      if (data?.session_id) {
+        setSessionId(data.session_id);
+      }
       setMessages((prev) => [
         ...prev,
-        { sender: "bot", text: data.reply || "답변을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요." },
+        {
+          sender: "bot",
+          text: data.reply || "답변을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+        },
       ]);
-    } catch {
+    } catch (err) {
+      console.error("Failed to send chatbot message", err);
       setMessages((prev) => [
         ...prev,
         { sender: "bot", text: "서버와 연결되지 않았습니다. 네트워크를 확인한 후 다시 시도해 주세요." },

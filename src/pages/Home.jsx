@@ -2,161 +2,137 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   BadgeCheck,
-  CalendarDays,
   MapPin,
   MessageCircle,
+  Heart,
   Search,
   Sparkles,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { useFavorites } from "../hooks/useFavorites";
+import {
+  filterBenefitsByRegion,
+  normalizeBenefitItem,
+} from "../utils/benefits";
 
 const FALLBACK_RECOMMENDATIONS = [
   {
     id: 1,
     title: "청년 주거비 지원",
-    desc: "19~34세 무주택 청년에게 보증금과 월세를 지원합니다.",
+    desc: "19~34세 도민에게 전월세 보증금을 지원합니다.",
     region: "수원시",
     category: "주거",
   },
   {
     id: 2,
-    title: "경기 긴급복지",
-    desc: "갑작스러운 위기 상황 가구에 생계·의료비를 신속하게 지원합니다.",
+    title: "아이 돌봄바우처",
+    desc: "맞벌이 가정을 위한 돌봄/교육 바우처입니다.",
     region: "경기도",
-    category: "긴급",
+    category: "가족",
   },
   {
     id: 3,
-    title: "돌봄 공백 SOS",
-    desc: "돌봄 공백이 있는 가정에 돌봄 인력과 비용을 지원합니다.",
-    region: "고양시",
-    category: "돌봄",
+    title: "문화생활 SOS",
+    desc: "문화 생활비를 지원하는 복지 프로그램입니다.",
+    region: "성남시",
+    category: "문화",
   },
   {
     id: 4,
-    title: "문화누리 카드",
-    desc: "문화 생활을 지원하기 위해 연간 바우처를 제공합니다.",
+    title: "청년 문화카드",
+    desc: "청년 문화활동 지원을 위한 카드형 바우처입니다.",
     region: "경기도",
     category: "문화",
   },
   {
     id: 5,
-    title: "아이돌봄 바우처",
-    desc: "아이돌봄 시간이 필요한 가정에 시간당 지원을 제공합니다.",
-    region: "성남시",
+    title: "아이돌봄 SOS",
+    desc: "돌봄 공백이 있는 가정을 위한 긴급 돌봄 지원입니다.",
+    region: "용인시",
     category: "돌봄",
   },
   {
     id: 6,
-    title: "에너지 바우처",
-    desc: "저소득층 겨울철 난방비 및 여름철 냉방비를 지원합니다.",
+    title: "노후 주거 개선",
+    desc: "어르신을 위한 주거환경 개선 지원입니다.",
     region: "경기도",
-    category: "생활",
+    category: "주거",
   },
 ];
 
 const QUICK_ACTIONS = [
   {
     id: "finder",
-    label: "맞춤 복지 찾기",
-    desc: "조건 설정 후 추천 받기",
+    label: "복지 혜택 찾기",
+    desc: "나에게 맞는 추천 받기",
     icon: Search,
     path: "/search",
   },
   {
     id: "map",
     label: "복지 지도",
-    desc: "가까운 센터 확인",
+    desc: "주변 복지 시설 확인",
     icon: MapPin,
     path: "/map",
   },
   {
     id: "chat",
     label: "챗봇 상담",
-    desc: "실시간 질문 응답",
+    desc: "실시간 복지 상담",
     icon: MessageCircle,
     path: "/chat",
   },
 ];
 
-const RECENT_ACTIVITIES = [
-  {
-    id: "1",
-    title: "청년 주거비 지원 신청",
-    status: "검토 중",
-    date: "2025.02.03",
-  },
-  {
-    id: "2",
-    title: "복지 플래너 상담 예약",
-    status: "완료",
-    date: "2025.01.23",
-  },
-  {
-    id: "3",
-    title: "경기 긴급복지 문의",
-    status: "답변 완료",
-    date: "2025.01.18",
-  },
-];
-
-function normalizeApplicationId(value) {
-  if (typeof value === "number" || typeof value === "string") {
-    return value;
-  }
-  return null;
-}
+const RECENT_STORAGE_PREFIX = "recent_activities";
 
 export default function Home() {
   const BASE_URL = import.meta.env.VITE_API_BASE_URL;
-  const { user, token } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
+  const { favorites, toggleFavorite, isFavorite } = useFavorites(user?.email);
+
+  const fallbackByRegion = useMemo(() => {
+    return filterBenefitsByRegion(FALLBACK_RECOMMENDATIONS, user?.location).slice(
+      0,
+      6
+    );
+  }, [user?.location]);
 
   const [healthStatus, setHealthStatus] = useState("정상");
-  const [recommendations, setRecommendations] = useState(
-    FALLBACK_RECOMMENDATIONS
-  );
+  const [recommendations, setRecommendations] = useState([]);
   const [loadingBenefit, setLoadingBenefit] = useState(true);
-  const [submittingId, setSubmittingId] = useState(null);
-  const [appliedIds, setAppliedIds] = useState([]);
-  const [applicationMessage, setApplicationMessage] = useState("");
-  const [recentApplications, setRecentApplications] = useState([]);
-  const [heroReady, setHeroReady] = useState(false);
-
-  const fetchApplications = useCallback(async () => {
-    if (!token) {
-      setAppliedIds([]);
-      setRecentApplications([]);
-      return;
-    }
-    try {
-      const res = await fetch(`${BASE_URL}/api/applications`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) return;
-      const payload = await res.json();
-      const list = Array.isArray(payload?.data) ? payload.data : payload;
-      if (Array.isArray(list)) {
-        const ids = list
-          .map((item) =>
-            normalizeApplicationId(item.benefit_id ?? item.benefitId ?? item.id)
-          )
-          .filter((id) => id !== null);
-        setAppliedIds(ids);
-        setRecentApplications(list.slice(0, 3));
-      } else {
-        setAppliedIds([]);
-        setRecentApplications([]);
-      }
-    } catch (err) {
-      console.warn("Failed to load applications", err);
-      setRecentApplications([]);
-    }
-  }, [BASE_URL, token]);
+  const favoriteHighlights = useMemo(
+    () => favorites.slice(0, 3),
+    [favorites]
+  );
+  const recentStorageKey = useMemo(
+    () => `${RECENT_STORAGE_PREFIX}:${user?.email || "guest"}`,
+    [user?.email]
+  );
+  const [recentActivities, setRecentActivities] = useState([]);
 
   useEffect(() => {
-    setHeroReady(true);
-  }, []);
+    try {
+      const stored = localStorage.getItem(recentStorageKey);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setRecentActivities(Array.isArray(parsed) ? parsed : []);
+      } else {
+        setRecentActivities([]);
+      }
+    } catch {
+      setRecentActivities([]);
+    }
+  }, [recentStorageKey]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(recentStorageKey, JSON.stringify(recentActivities));
+    } catch {
+      // ignore storage errors
+    }
+  }, [recentActivities, recentStorageKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -172,15 +148,18 @@ export default function Home() {
     }
 
     async function loadBenefits() {
-      try {
-        const params = new URLSearchParams();
-        if (user?.location) {
-          params.set("sigun_name", user.location);
+      if (!user?.email) {
+        if (!cancelled) {
+          setRecommendations(fallbackByRegion);
+          setLoadingBenefit(false);
         }
-        params.set("limit", "6");
-        const query = params.toString();
+        return;
+      }
+
+      try {
+        const params = new URLSearchParams({ email: user.email });
         const res = await fetch(
-          `${BASE_URL}/api/welfare/list${query ? `?${query}` : ""}`
+          `${BASE_URL}/api/welfare/list?${params.toString()}`
         );
         if (!res.ok) throw new Error("failed to load benefits");
         const data = await res.json();
@@ -191,34 +170,20 @@ export default function Home() {
           : [];
 
         if (!cancelled && welfareList.length) {
-          const normalized = welfareList.slice(0, 6).map((item, index) => {
-            const descriptionCandidates = [
-              item.desc,
-              item.description,
-              item.target,
-              item.support_cycle,
-              item.apply_method,
-            ].filter(Boolean);
-
-            return {
-              id:
-                item.id ??
-                item.service_id ??
-                item.service_name ??
-                item.service_url ??
-                index,
-              title: item.title ?? item.service_name ?? "복지 서비스",
-              desc:
-                descriptionCandidates.join(" · ") ||
-                "자세한 내용은 상세 페이지에서 확인해 주세요.",
-              region: item.region ?? item.sigun_name ?? "경기도",
-              category: item.category ?? item.department ?? "복지",
-            };
-          });
-          setRecommendations(normalized);
+          const normalized = welfareList.map((item, index) =>
+            normalizeBenefitItem(item, index)
+          );
+          const limited = filterBenefitsByRegion(
+            normalized,
+            user?.location
+          ).slice(0, 6);
+          setRecommendations(limited.length ? limited : fallbackByRegion);
         }
       } catch (error) {
-        console.warn("failed to load benefits", error);
+          console.warn("failed to load benefits", error);
+          if (!cancelled) {
+            setRecommendations(fallbackByRegion);
+          }
       } finally {
         if (!cancelled) setLoadingBenefit(false);
       }
@@ -227,12 +192,10 @@ export default function Home() {
     loadStatus();
     loadBenefits();
 
-    fetchApplications();
-
     return () => {
       cancelled = true;
     };
-  }, [BASE_URL, fetchApplications, user?.location]);
+  }, [BASE_URL, fallbackByRegion, user?.email, user?.location]);
 
   const greeting = useMemo(() => {
     const hour = new Date().getHours();
@@ -241,40 +204,30 @@ export default function Home() {
     return "편안한 저녁 보내세요";
   }, []);
 
-  async function handleApply(benefit) {
-    if (!token) return;
-    const normalizedId = benefit.id ?? benefit.benefit_id;
-    if (appliedIds.includes(normalizedId)) return;
-    setSubmittingId(normalizedId);
-    setApplicationMessage("");
-    try {
-      const res = await fetch(`${BASE_URL}/api/applications`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          benefit_id: normalizedId,
-          title: benefit.title,
-          email: user?.email ?? "",
-        }),
-      });
-      if (!res.ok) throw new Error("failed");
-      setAppliedIds((prev) =>
-        Array.from(new Set([...prev, normalizedId]))
-      );
-      setApplicationMessage(
-        `'${benefit.title}' 신청이 완료되었습니다. 마이페이지에서 신청 내역을 확인할 수 있습니다.`
-      );
-      fetchApplications();
-    } catch (err) {
-      console.error(err);
-      setApplicationMessage("신청 처리 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.");
-    } finally {
-      setSubmittingId(null);
-    }
-  }
+  const addRecentActivity = useCallback((benefit) => {
+    const entry = {
+      id: `${benefit?.id ?? "benefit"}-${Date.now()}`,
+      title: benefit?.title ?? "복지 신청",
+      status: "신청 이동",
+      date: new Date().toLocaleDateString(),
+    };
+    setRecentActivities((prev) => {
+      const next = [entry, ...prev];
+      return next.slice(0, 5);
+    });
+  }, []);
+
+  const handleOpenLink = useCallback(
+    (benefit) => {
+      if (!benefit?.link) {
+        alert("신청 링크가 제공되지 않았습니다.");
+        return;
+      }
+      addRecentActivity(benefit);
+      window.open(benefit.link, "_blank", "noopener,noreferrer");
+    },
+    [addRecentActivity]
+  );
 
   return (
     <section className="space-y-8">
@@ -285,12 +238,12 @@ export default function Home() {
             {greeting}, {user?.name || "경기복지인"}님
           </h1>
           <p className="mt-3 text-base text-white/80">
-            한눈에 보는 맞춤 복지 혜택과 진행 현황을 확인해 주세요.
+            하루를 든든하게 만들어 줄 맞춤 혜택과 건강 정보를 만나보세요.
           </p>
           <div className="mt-6 flex flex-wrap gap-4 text-sm">
             <span className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-white">
               <Sparkles className="h-4 w-4 text-white" />
-              추천 혜택 {recommendations.length}개
+              추천 혜택 {recommendations.length}건
             </span>
             <span className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-white">
               <BadgeCheck className="h-4 w-4 text-white" />
@@ -301,8 +254,10 @@ export default function Home() {
         <div className="rounded-2xl bg-white/10 p-4 text-sm text-white backdrop-blur">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-base font-semibold text-white">진행 중인 신청</h2>
-              <p className="mt-1 text-white/80">최근 최대 3건까지 확인됩니다.</p>
+              <h2 className="text-base font-semibold text-white">관심 있는 신청</h2>
+              <p className="mt-1 text-white/80">
+                하트를 눌러 최대 3개의 관심 혜택을 저장해 보세요.
+              </p>
             </div>
             <button
               className="rounded-full border border-white/40 px-3 py-1 text-xs font-semibold text-white hover:bg-white/15"
@@ -311,29 +266,34 @@ export default function Home() {
               마이페이지
             </button>
           </div>
-          {recentApplications.length ? (
+          {favoriteHighlights.length ? (
             <ul className="mt-4 space-y-3">
-              {recentApplications.map((app) => (
+              {favoriteHighlights.map((fav) => (
                 <li
-                  key={app.id ?? app.benefit_id}
-                  className="rounded-2xl border border-white/20 bg-white/5 px-4 py-3"
+                  key={fav.id}
+                  className="flex items-center justify-between gap-3 rounded-2xl border border-white/20 bg-white/5 px-4 py-3"
                 >
-                  <p className="text-sm font-semibold text-white">
-                    {app.title || app.name || "복지 신청"}
-                  </p>
-                  <p className="text-xs text-white/70">
-                    {(app.status || "검토 중") +
-                      " · " +
-                      (app.applied_at
-                        ? new Date(app.applied_at).toLocaleDateString()
-                        : "방금")}
-                  </p>
+                  <div>
+                    <p className="text-sm font-semibold text-white">
+                      {fav.title}
+                    </p>
+                    <p className="text-xs text-white/70">
+                      {fav.category} · {fav.region}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleOpenLink(fav)}
+                    disabled={!fav.link}
+                    className="rounded-full border border-white/30 px-3 py-1 text-xs font-semibold text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:border-white/10 disabled:text-white/50"
+                  >
+                    바로가기
+                  </button>
                 </li>
               ))}
             </ul>
           ) : (
             <p className="mt-4 rounded-2xl border border-dashed border-white/30 px-4 py-3 text-sm text-white/80">
-              진행 중인 신청 내역이 없습니다. 원하는 혜택을 신청해 보세요.
+              관심 목록이 비어 있습니다. 추천 카드의 하트를 눌러 관심 혜택을 추가해 보세요.
             </p>
           )}
         </div>
@@ -350,48 +310,52 @@ export default function Home() {
             전체 보기
           </button>
         </div>
-        {applicationMessage && (
-          <p className="mt-2 rounded-2xl bg-slate-50 px-4 py-2 text-sm text-slate-600">
-            {applicationMessage}
-          </p>
-        )}
         <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {recommendations.map((benefit) => (
-            <article
-              key={benefit.id}
-              className="rounded-2xl border border-slate-100 p-5 shadow-sm transition-transform duration-300 hover:-translate-y-1 hover:shadow-lg"
-            >
-              <div className="text-xs font-semibold text-slate-400">
-                {benefit.category} · {benefit.region}
-              </div>
-              <h3 className="mt-2 text-lg font-semibold text-slate-900">
-                {benefit.title}
-              </h3>
-              <p className="mt-1 text-sm text-slate-600">{benefit.desc}</p>
-              <button
-                onClick={() => handleApply(benefit)}
-                disabled={
-                  appliedIds.includes(benefit.id ?? benefit.benefit_id) ||
-                  submittingId === (benefit.id ?? benefit.benefit_id)
-                }
-                className={`mt-4 rounded-2xl border px-4 py-2 text-sm font-semibold transition ${
-                  appliedIds.includes(benefit.id ?? benefit.benefit_id)
-                    ? "border-slate-200 text-slate-400"
-                    : "border-[#00a69c] text-[#00a69c] hover:bg-[#00a69c]/5"
-                }`}
-              >
-                {appliedIds.includes(benefit.id ?? benefit.benefit_id)
-                  ? "신청 완료"
-                  : submittingId === (benefit.id ?? benefit.benefit_id)
-                  ? "신청 중..."
-                  : "신청하기"}
-              </button>
-            </article>
-          ))}
-          {!recommendations.length && !loadingBenefit && (
-            <div className="col-span-full rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
-              추천 데이터를 불러오지 못했습니다.
+          {loadingBenefit ? (
+            <div className="col-span-full rounded-2xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
+              추천 데이터를 불러오는 중입니다...
             </div>
+          ) : (
+            <>
+              {recommendations.map((benefit) => (
+                <article
+                  key={benefit.id}
+                  className="rounded-2xl border border-slate-100 p-5 shadow-sm transition-transform duration-300 hover:-translate-y-1 hover:shadow-lg"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="text-xs font-semibold text-slate-400">
+                      {benefit.category} · {benefit.region}
+                    </div>
+                    <button
+                      onClick={() => toggleFavorite(benefit)}
+                      aria-pressed={isFavorite(benefit)}
+                      className="rounded-full border border-slate-100 p-2 text-[#f43f5e] transition hover:bg-[#f43f5e]/10"
+                    >
+                      <Heart
+                        className="h-4 w-4"
+                        fill={isFavorite(benefit) ? "#f43f5e" : "none"}
+                      />
+                    </button>
+                  </div>
+                  <h3 className="mt-2 text-lg font-semibold text-slate-900">
+                    {benefit.title}
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-600">{benefit.desc}</p>
+                  <button
+                    onClick={() => handleOpenLink(benefit)}
+                    disabled={!benefit.link}
+                    className="mt-4 w-full rounded-2xl border border-[#00a69c] px-4 py-2 text-sm font-semibold text-[#00a69c] transition hover:bg-[#00a69c]/5 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
+                  >
+                    {benefit.link ? "신청하러 가기" : "신청 정보 없음"}
+                  </button>
+                </article>
+              ))}
+              {!recommendations.length && (
+                <div className="col-span-full rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                  추천 데이터를 불러오지 못했습니다.
+                </div>
+              )}
+            </>
           )}
         </div>
       </section>
@@ -425,20 +389,26 @@ export default function Home() {
 
         <div className="rounded-3xl bg-white p-6 shadow-sm">
           <h2 className="text-xl font-semibold text-slate-900">최근 활동</h2>
-          <ul className="mt-4 space-y-4 text-sm">
-            {RECENT_ACTIVITIES.map((activity) => (
-              <li
-                key={activity.id}
-                className="rounded-2xl border border-slate-100 p-4 transition hover:-translate-y-1 hover:shadow-sm"
-              >
-                <p className="font-semibold text-slate-900">{activity.title}</p>
-                <div className="mt-1 flex items-center justify-between text-xs text-slate-500">
-                  <span>{activity.status}</span>
-                  <span>{activity.date}</span>
-                </div>
-              </li>
-            ))}
-          </ul>
+          {recentActivities.length ? (
+            <ul className="mt-4 space-y-4 text-sm">
+              {recentActivities.slice(0, 3).map((activity) => (
+                <li
+                  key={activity.id}
+                  className="rounded-2xl border border-slate-100 p-4 transition hover:-translate-y-1 hover:shadow-sm"
+                >
+                  <p className="font-semibold text-slate-900">{activity.title}</p>
+                  <div className="mt-1 flex items-center justify-between text-xs text-slate-500">
+                    <span>{activity.status}</span>
+                    <span>{activity.date}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-4 rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
+              아직 최근 활동이 없습니다. 신청하기 버튼을 눌러 활동을 추가해 보세요.
+            </p>
+          )}
         </div>
       </section>
     </section>
