@@ -121,6 +121,7 @@ export default function Home() {
   const [appliedIds, setAppliedIds] = useState([]);
   const [applicationMessage, setApplicationMessage] = useState("");
   const [recentApplications, setRecentApplications] = useState([]);
+  const [heroReady, setHeroReady] = useState(false);
 
   const fetchApplications = useCallback(async () => {
     if (!token) {
@@ -154,6 +155,10 @@ export default function Home() {
   }, [BASE_URL, token]);
 
   useEffect(() => {
+    setHeroReady(true);
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function loadStatus() {
@@ -168,13 +173,21 @@ export default function Home() {
 
     async function loadBenefits() {
       try {
-        const res = await fetch(`${BASE_URL}/api/welfare/list`);
+        const params = new URLSearchParams();
+        if (user?.location) {
+          params.set("sigun_name", user.location);
+        }
+        params.set("limit", "6");
+        const query = params.toString();
+        const res = await fetch(
+          `${BASE_URL}/api/welfare/list${query ? `?${query}` : ""}`
+        );
         if (!res.ok) throw new Error("failed to load benefits");
         const data = await res.json();
-        const welfareList = Array.isArray(data?.welfare)
-          ? data.welfare
-          : Array.isArray(data)
+        const welfareList = Array.isArray(data)
           ? data
+          : Array.isArray(data?.welfare)
+          ? data.welfare
           : [];
 
         if (!cancelled && welfareList.length) {
@@ -219,7 +232,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [BASE_URL, fetchApplications]);
+  }, [BASE_URL, fetchApplications, user?.location]);
 
   const greeting = useMemo(() => {
     const hour = new Date().getHours();
@@ -265,34 +278,34 @@ export default function Home() {
 
   return (
     <section className="space-y-8">
-      <div className="grid gap-6 rounded-3xl bg-white p-8 shadow-sm lg:grid-cols-[2fr,1fr]">
+      <div className="grid gap-6 rounded-3xl bg-gradient-to-r from-[#004c72] to-[#009fc2] p-8 text-white shadow-lg lg:grid-cols-[2fr,1fr]">
         <div>
-          <p className="text-sm uppercase tracking-[0.4em] text-[#00a69c]">오늘의 정보</p>
-          <h1 className="mt-2 text-3xl font-bold text-slate-900">
-            {greeting}, {user?.name || "경기도민"}님!
+          <p className="text-sm uppercase tracking-[0.5em] text-white/70">오늘의 복지 브리핑</p>
+          <h1 className="mt-3 text-4xl font-semibold leading-tight">
+            {greeting}, {user?.name || "경기복지인"}님
           </h1>
-          <p className="mt-2 text-sm text-slate-500">
-            지금 신청 가능한 맞춤 복지 혜택과 진행 상황을 한눈에 확인할 수 있어요.
+          <p className="mt-3 text-base text-white/80">
+            한눈에 보는 맞춤 복지 혜택과 진행 현황을 확인해 주세요.
           </p>
-          <div className="mt-6 flex flex-wrap gap-4 text-sm text-slate-600">
-            <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2">
-              <Sparkles className="h-4 w-4 text-[#00a69c]" />
-              추천 혜택 {recommendations.length}건
+          <div className="mt-6 flex flex-wrap gap-4 text-sm">
+            <span className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-white">
+              <Sparkles className="h-4 w-4 text-white" />
+              추천 혜택 {recommendations.length}개
             </span>
-            <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2">
-              <BadgeCheck className="h-4 w-4 text-[#00a69c]" />
-              서버 상태 {healthStatus}
+            <span className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-white">
+              <BadgeCheck className="h-4 w-4 text-white" />
+              건강 상태 {healthStatus}
             </span>
           </div>
         </div>
-        <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
+        <div className="rounded-2xl bg-white/10 p-4 text-sm text-white backdrop-blur">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-base font-semibold text-slate-900">진행 중인 신청</h2>
-              <p className="mt-1">최근 신청한 복지 혜택을 최대 3건까지 보여드려요.</p>
+              <h2 className="text-base font-semibold text-white">진행 중인 신청</h2>
+              <p className="mt-1 text-white/80">최근 최대 3건까지 확인됩니다.</p>
             </div>
             <button
-              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-[#00a69c] hover:text-[#00a69c]"
+              className="rounded-full border border-white/40 px-3 py-1 text-xs font-semibold text-white hover:bg-white/15"
               onClick={() => navigate("/mypage")}
             >
               마이페이지
@@ -303,12 +316,12 @@ export default function Home() {
               {recentApplications.map((app) => (
                 <li
                   key={app.id ?? app.benefit_id}
-                  className="rounded-2xl border border-slate-100 px-4 py-3"
+                  className="rounded-2xl border border-white/20 bg-white/5 px-4 py-3"
                 >
-                  <p className="text-sm font-semibold text-slate-900">
+                  <p className="text-sm font-semibold text-white">
                     {app.title || app.name || "복지 신청"}
                   </p>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-white/70">
                     {(app.status || "검토 중") +
                       " · " +
                       (app.applied_at
@@ -319,7 +332,7 @@ export default function Home() {
               ))}
             </ul>
           ) : (
-            <p className="mt-4 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            <p className="mt-4 rounded-2xl border border-dashed border-white/30 px-4 py-3 text-sm text-white/80">
               진행 중인 신청 내역이 없습니다. 원하는 혜택을 신청해 보세요.
             </p>
           )}
@@ -346,7 +359,7 @@ export default function Home() {
           {recommendations.map((benefit) => (
             <article
               key={benefit.id}
-              className="rounded-2xl border border-slate-100 p-5 shadow-sm"
+              className="rounded-2xl border border-slate-100 p-5 shadow-sm transition-transform duration-300 hover:-translate-y-1 hover:shadow-lg"
             >
               <div className="text-xs font-semibold text-slate-400">
                 {benefit.category} · {benefit.region}
@@ -391,7 +404,7 @@ export default function Home() {
               <button
                 key={id}
                 onClick={() => navigate(path)}
-                className="flex items-center justify-between rounded-2xl border border-slate-100 px-4 py-3 text-left transition hover:border-[#00a69c]/40 hover:bg-[#00a69c]/5"
+                className="flex items-center justify-between rounded-2xl border border-slate-100 px-4 py-3 text-left transition hover:-translate-y-1 hover:border-[#00a69c]/40 hover:bg-[#00a69c]/5"
               >
                 <div className="flex items-center gap-3">
                   <span className="rounded-2xl bg-[#00a69c]/10 p-3 text-[#00a69c]">
@@ -416,7 +429,7 @@ export default function Home() {
             {RECENT_ACTIVITIES.map((activity) => (
               <li
                 key={activity.id}
-                className="rounded-2xl border border-slate-100 p-4"
+                className="rounded-2xl border border-slate-100 p-4 transition hover:-translate-y-1 hover:shadow-sm"
               >
                 <p className="font-semibold text-slate-900">{activity.title}</p>
                 <div className="mt-1 flex items-center justify-between text-xs text-slate-500">

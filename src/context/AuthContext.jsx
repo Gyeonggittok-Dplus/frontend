@@ -54,6 +54,14 @@ export function AuthProvider({ children }) {
     localStorage.setItem("needs_survey", "false");
   }, []);
 
+  const updateUserProfile = useCallback((profile = {}) => {
+    setUser((prev) => {
+      const nextUser = prev ? { ...prev, ...profile } : { ...profile };
+      localStorage.setItem("user", JSON.stringify(nextUser));
+      return nextUser;
+    });
+  }, []);
+
   const value = {
     token,
     user,
@@ -62,6 +70,7 @@ export function AuthProvider({ children }) {
     login,
     logout,
     completeSurvey,
+    updateUserProfile,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

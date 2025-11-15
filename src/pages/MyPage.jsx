@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 
 export default function MyPage() {
   const BASE_URL = import.meta.env.VITE_API_BASE_URL;
-  const { token, user } = useAuth();
+  const { token, user, updateUserProfile } = useAuth();
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -28,6 +28,33 @@ export default function MyPage() {
     }
     loadApplications();
   }, [BASE_URL, token]);
+
+  useEffect(() => {
+    async function loadProfile() {
+      if (!user?.email) return;
+      try {
+        const params = new URLSearchParams({ email: user.email });
+        const res = await fetch(
+          `${BASE_URL}/api/auth/profile?${params.toString()}`,
+          {
+            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          }
+        );
+        if (!res.ok) throw new Error("failed");
+        const data = await res.json();
+        if (data && typeof data === "object") {
+          updateUserProfile({
+            age: data.age,
+            location: data.location,
+            sex: data.sex,
+          });
+        }
+      } catch (err) {
+        console.error("Failed to load user profile", err);
+      }
+    }
+    loadProfile();
+  }, [BASE_URL, token, updateUserProfile, user?.email]);
 
   async function cancelApplication(id) {
     if (!token) return;
