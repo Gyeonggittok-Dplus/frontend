@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useFavorites } from "../hooks/useFavorites";
+import { useRecentApplications } from "../hooks/useRecentApplications";
 import {
   filterBenefitsByRegion,
   normalizeBenefitItem,
@@ -84,13 +85,16 @@ const QUICK_ACTIONS = [
   },
 ];
 
-const RECENT_STORAGE_PREFIX = "recent_activities";
-
 export default function Home() {
   const BASE_URL = import.meta.env.VITE_API_BASE_URL;
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const navigate = useNavigate();
   const { favorites, toggleFavorite, isFavorite } = useFavorites(user?.email);
+  const {
+    applications: recentActivities,
+    addApplication,
+    loading: recentActivitiesLoading,
+  } = useRecentApplications(user?.email, token);
 
   const fallbackByRegion = useMemo(() => {
     return filterBenefitsByRegion(FALLBACK_RECOMMENDATIONS, user?.location).slice(
@@ -106,33 +110,6 @@ export default function Home() {
     () => favorites.slice(0, 3),
     [favorites]
   );
-  const recentStorageKey = useMemo(
-    () => `${RECENT_STORAGE_PREFIX}:${user?.email || "guest"}`,
-    [user?.email]
-  );
-  const [recentActivities, setRecentActivities] = useState([]);
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(recentStorageKey);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        setRecentActivities(Array.isArray(parsed) ? parsed : []);
-      } else {
-        setRecentActivities([]);
-      }
-    } catch {
-      setRecentActivities([]);
-    }
-  }, [recentStorageKey]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(recentStorageKey, JSON.stringify(recentActivities));
-    } catch {
-      // ignore storage errors
-    }
-  }, [recentActivities, recentStorageKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -204,29 +181,22 @@ export default function Home() {
     return "편안한 저녁 보내세요";
   }, []);
 
-  const addRecentActivity = useCallback((benefit) => {
-    const entry = {
-      id: `${benefit?.id ?? "benefit"}-${Date.now()}`,
-      title: benefit?.title ?? "복지 신청",
-      status: "신청 이동",
-      date: new Date().toLocaleDateString(),
-    };
-    setRecentActivities((prev) => {
-      const next = [entry, ...prev];
-      return next.slice(0, 5);
-    });
-  }, []);
-
   const handleOpenLink = useCallback(
     (benefit) => {
       if (!benefit?.link) {
         alert("신청 링크가 제공되지 않았습니다.");
         return;
       }
-      addRecentActivity(benefit);
+      addApplication({
+        id: benefit.id,
+        title: benefit.title,
+        region: benefit.region,
+        status: "신청 이동",
+        date: new Date().toISOString(),
+      });
       window.open(benefit.link, "_blank", "noopener,noreferrer");
     },
-    [addRecentActivity]
+    [addApplication]
   );
 
   return (
@@ -389,7 +359,11 @@ export default function Home() {
 
         <div className="rounded-3xl bg-white p-6 shadow-sm">
           <h2 className="text-xl font-semibold text-slate-900">최근 활동</h2>
-          {recentActivities.length ? (
+          {recentActivitiesLoading ? (
+            <p className="mt-4 text-sm text-slate-500">
+              최근 활동을 불러오는 중입니다...
+            </p>
+          ) : recentActivities.length ? (
             <ul className="mt-4 space-y-4 text-sm">
               {recentActivities.slice(0, 3).map((activity) => (
                 <li
@@ -399,7 +373,11 @@ export default function Home() {
                   <p className="font-semibold text-slate-900">{activity.title}</p>
                   <div className="mt-1 flex items-center justify-between text-xs text-slate-500">
                     <span>{activity.status}</span>
-                    <span>{activity.date}</span>
+                    <span>
+                      {activity.date
+                        ? new Date(activity.date).toLocaleDateString()
+                        : "방금 전"}
+                    </span>
                   </div>
                 </li>
               ))}

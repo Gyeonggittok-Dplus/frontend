@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useFavorites } from "../hooks/useFavorites";
+import { useRecentApplications } from "../hooks/useRecentApplications";
 
-const RECENT_STORAGE_PREFIX = "recent_activities";
 const REGIONS = [
   "\uacbd\uae30\ub3c4 \uc804\uccb4",
   "\uc218\uc6d0\uc2dc",
@@ -38,6 +38,7 @@ const REGIONS = [
   "\uac00\ud3c9\uad70",
   "\uc591\ud3c9\uad70",
 ];
+
 const SEX_OPTIONS = [
   { value: "M", label: "남성" },
   { value: "F", label: "여성" },
@@ -46,14 +47,14 @@ const SEX_OPTIONS = [
 export default function MyPage() {
   const BASE_URL = import.meta.env.VITE_API_BASE_URL;
   const { token, user, updateUserProfile } = useAuth();
-  const [applications, setApplications] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const storageKey = useMemo(
-    () => `${RECENT_STORAGE_PREFIX}:${user?.email || "guest"}`,
-    [user?.email]
-  );
   const { favorites, toggleFavorite } = useFavorites(user?.email);
+  const {
+    applications,
+    loading: applicationsLoading,
+    error: applicationsError,
+    removeApplication,
+  } = useRecentApplications(user?.email, token);
+
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState({
     age: user?.age ?? "",
@@ -61,11 +62,6 @@ export default function MyPage() {
     sex: user?.sex ?? "",
   });
   const [regionQuery, setRegionQuery] = useState("");
-  const filteredRegions = useMemo(() => {
-    const query = regionQuery.trim();
-    if (!query) return REGIONS;
-    return REGIONS.filter((region) => region.includes(query));
-  }, [regionQuery]);
 
   useEffect(() => {
     setProfileForm({
@@ -75,27 +71,11 @@ export default function MyPage() {
     });
   }, [user?.age, user?.location, user?.sex]);
 
-  useEffect(() => {
-    function loadApplications() {
-      try {
-        const stored = localStorage.getItem(storageKey);
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          setApplications(Array.isArray(parsed) ? parsed : []);
-        } else {
-          setApplications([]);
-        }
-        setError("");
-      } catch (err) {
-        console.error(err);
-        setError("신청 내역을 불러오지 못했습니다.");
-        setApplications([]);
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadApplications();
-  }, [storageKey]);
+  const filteredRegions = useMemo(() => {
+    const query = regionQuery.trim();
+    if (!query) return REGIONS;
+    return REGIONS.filter((region) => region.includes(query));
+  }, [regionQuery]);
 
   useEffect(() => {
     async function loadProfile() {
@@ -124,54 +104,64 @@ export default function MyPage() {
     loadProfile();
   }, [BASE_URL, token, updateUserProfile, user?.email]);
 
-  function cancelApplication(id) {
-    setApplications((prev) => {
-      const next = prev.filter((app) => app.id !== id);
-      localStorage.setItem(storageKey, JSON.stringify(next));
-      return next;
-    });
-  }
-
-  function handleProfileChange(e) {
+  const handleProfileChange = (e) => {
     const { name, value } = e.target;
     setProfileForm((prev) => ({ ...prev, [name]: value }));
-  }
+  };
 
-  function handleProfileSubmit(e) {
-    e.preventDefault();
-    const cleaned = {
-      age: Number(profileForm.age) || "",
-      location: profileForm.location,
-      sex: profileForm.sex,
-    };
-    updateUserProfile(cleaned);
-    setIsEditingProfile(false);
-  }
+  const handleRegionSelect = (region) => {
+    setProfileForm((prev) => ({ ...prev, location: region }));
+  };
 
-  function handleProfileCancel() {
+  const handleSexSelect = (value) => {
+    setProfileForm((prev) => ({ ...prev, sex: value }));
+  };
+
+  const handleProfileCancel = () => {
     setProfileForm({
       age: user?.age ?? "",
       location: user?.location ?? "",
       sex: user?.sex ?? "",
     });
     setIsEditingProfile(false);
-  }
+  };
 
-  function handleFavoriteLink(item) {
+  const handleProfileSubmit = async (e) => {
+    e.preventDefault();
+    if (!user?.email) return;
+    const cleaned = {
+      age: Number(profileForm.age) || "",
+      location: profileForm.location,
+      sex: profileForm.sex,
+    };
+    updateUserProfile(cleaned);
+    try {
+      await fetch(`${BASE_URL}/api/auth/post_inform`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          email: user.email,
+          age: cleaned.age,
+          location: cleaned.location,
+          sex: cleaned.sex,
+        }),
+      });
+    } catch (err) {
+      console.error("Failed to sync profile to server", err);
+    }
+    setIsEditingProfile(false);
+  };
+
+  const handleFavoriteLink = (item) => {
     if (!item?.link) {
       alert("신청 링크가 제공되지 않았습니다.");
       return;
     }
     window.open(item.link, "_blank", "noopener,noreferrer");
-  }
-
-  function handleRegionSelect(region) {
-    setProfileForm((prev) => ({ ...prev, location: region }));
-  }
-
-  function handleSexSelect(value) {
-    setProfileForm((prev) => ({ ...prev, sex: value }));
-  }
+  };
 
   const displayName = user?.name ? `${user.name} 님의` : "내";
   const sexLabel =
@@ -189,7 +179,7 @@ export default function MyPage() {
           {displayName} 신청 내역
         </h1>
         <p className="mt-2 text-sm text-slate-500">
-          나의 기본 정보를 관리하고 관심/신청 목록을 모아볼 수 있습니다.
+          나의 기본 정보를 관리하고, 최근 신청/관심 목록을 모아볼 수 있습니다.
         </p>
       </header>
 
@@ -349,12 +339,12 @@ export default function MyPage() {
 
       <div className="rounded-3xl bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-900">최근 신청 내역</h2>
-        {loading ? (
+        {applicationsLoading ? (
           <p className="mt-4 text-sm text-slate-500">
             신청 내역을 불러오는 중입니다...
           </p>
-        ) : error ? (
-          <p className="mt-4 text-sm text-red-500">{error}</p>
+        ) : applicationsError ? (
+          <p className="mt-4 text-sm text-red-500">{applicationsError}</p>
         ) : applications.length === 0 ? (
           <div className="mt-4 rounded-2xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
             아직 신청한 복지 혜택이 없습니다. 홈 화면에서 새로 신청해 보세요.
@@ -368,21 +358,20 @@ export default function MyPage() {
               >
                 <div>
                   <p className="text-base font-semibold text-slate-900">
-                    {app.title || app.name || "복지 신청"}
+                    {app.title || "복지 신청"}
                   </p>
                   <p className="text-xs text-slate-500">
                     {(app.region || "미정") +
                       " · " +
                       (app.status || "신청 이동") +
                       " · " +
-                      (app.date ||
-                        (app.applied_at
-                          ? new Date(app.applied_at).toLocaleDateString()
-                          : "방금 전"))}
+                      (app.date
+                        ? new Date(app.date).toLocaleDateString()
+                        : "방금 전")}
                   </p>
                 </div>
                 <button
-                  onClick={() => cancelApplication(app.id)}
+                  onClick={() => removeApplication(app.id)}
                   className="flex items-center gap-2 rounded-full border border-red-100 px-4 py-2 text-xs font-semibold text-red-500 transition hover:bg-red-50"
                 >
                   <Trash2 className="h-4 w-4" />
