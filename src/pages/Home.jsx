@@ -16,6 +16,7 @@ import {
   normalizeBenefitItem,
 } from "../utils/benefits";
 
+
 const FALLBACK_RECOMMENDATIONS = [
   {
     id: 1,
@@ -210,23 +211,14 @@ export default function Home() {
           <p className="mt-3 text-base text-white/80">
             하루를 든든하게 만들어 줄 맞춤 혜택과 건강 정보를 만나보세요.
           </p>
-          <div className="mt-6 flex flex-wrap gap-4 text-sm">
-            <span className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-white">
-              <Sparkles className="h-4 w-4 text-white" />
-              추천 혜택 {recommendations.length}건
-            </span>
-            <span className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-white">
-              <BadgeCheck className="h-4 w-4 text-white" />
-              건강 상태 {healthStatus}
-            </span>
-          </div>
+          
         </div>
         <div className="rounded-2xl bg-white/10 p-4 text-sm text-white backdrop-blur">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-base font-semibold text-white">관심 있는 신청</h2>
+              <h2 className="text-base font-semibold text-white">관심 있는 신청 미리보기</h2>
               <p className="mt-1 text-white/80">
-                하트를 눌러 최대 3개의 관심 혜택을 저장해 보세요.
+                하트를 눌러 최대 3개까지 미리보기
               </p>
             </div>
             <button
@@ -247,9 +239,7 @@ export default function Home() {
                     <p className="text-sm font-semibold text-white">
                       {fav.title}
                     </p>
-                    <p className="text-xs text-white/70">
-                      {fav.category} · {fav.region}
-                    </p>
+                    
                   </div>
                   <button
                     onClick={() => handleOpenLink(fav)}
@@ -271,7 +261,7 @@ export default function Home() {
       <section className="rounded-3xl bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold text-slate-900">
-            추천 복지 혜택
+            복지 혜택
           </h2>
           <button
             className="text-sm font-semibold text-[#00a69c]"
@@ -365,14 +355,14 @@ export default function Home() {
             </p>
           ) : recentActivities.length ? (
             <ul className="mt-4 space-y-4 text-sm">
-              {recentActivities.slice(0, 3).map((activity) => (
+              {recentActivities.slice(0, 2).map((activity) => (
                 <li
                   key={activity.id}
                   className="rounded-2xl border border-slate-100 p-4 transition hover:-translate-y-1 hover:shadow-sm"
                 >
                   <p className="font-semibold text-slate-900">{activity.title}</p>
                   <div className="mt-1 flex items-center justify-between text-xs text-slate-500">
-                    <span>{activity.status}</span>
+                    
                     <span>
                       {activity.date
                         ? new Date(activity.date).toLocaleDateString()

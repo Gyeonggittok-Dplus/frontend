@@ -83,18 +83,20 @@ export default function MyPage() {
       try {
         const params = new URLSearchParams({ email: user.email });
         const res = await fetch(
-          `${BASE_URL}/api/auth/profile?${params.toString()}`,
+          `${BASE_URL}/api/auth/get_inform?${params.toString()}`,
           {
             headers: token ? { Authorization: `Bearer ${token}` } : undefined,
           }
         );
+        
         if (!res.ok) throw new Error("failed");
         const data = await res.json();
         if (data && typeof data === "object") {
+          console
           updateUserProfile({
-            age: data.age,
-            location: data.location,
-            sex: data.sex,
+            age: data.user.age,
+            location: data.user.location,
+            sex: data.user.sex,
           });
         }
       } catch (err) {
@@ -134,20 +136,20 @@ export default function MyPage() {
       location: profileForm.location,
       sex: profileForm.sex,
     };
+    const params = new URLSearchParams({
+      email: user.email,
+      age: cleaned.age?.toString() || "",
+      location: cleaned.location || "",
+      sex: cleaned.sex || "",
+    });
+    console.log(user.email)
     updateUserProfile(cleaned);
     try {
-      await fetch(`${BASE_URL}/api/auth/post_inform`, {
+      await fetch(`${BASE_URL}/api/inform/update_inform?${params.toString()}`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({
-          email: user.email,
-          age: cleaned.age,
-          location: cleaned.location,
-          sex: cleaned.sex,
-        }),
       });
     } catch (err) {
       console.error("Failed to sync profile to server", err);
@@ -308,9 +310,7 @@ export default function MyPage() {
                   <p className="text-base font-semibold text-slate-900">
                     {fav.title}
                   </p>
-                  <p className="text-xs text-slate-500">
-                    {fav.category} · {fav.region || "지역 미정"}
-                  </p>
+                  
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -337,7 +337,7 @@ export default function MyPage() {
         )}
       </div>
 
-      <div className="rounded-3xl bg-white p-6 shadow-sm">
+      {/* <div className="rounded-3xl bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-900">최근 신청 내역</h2>
         {applicationsLoading ? (
           <p className="mt-4 text-sm text-slate-500">
@@ -381,7 +381,7 @@ export default function MyPage() {
             ))}
           </ul>
         )}
-      </div>
+      </div> */}
     </section>
   );
 }

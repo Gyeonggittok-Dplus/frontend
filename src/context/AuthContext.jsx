@@ -1,64 +1,74 @@
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useState } from "react";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [token, setToken] = useState(null);
-  const [user, setUser] = useState(null);
-  const [needsSurvey, setNeedsSurvey] = useState(false);
+  // ─────────────────────────────────
+  // 1) 초기값을 localStorage에서 바로 읽기 (새로고침해도 유지)
+  // ─────────────────────────────────
+  const [token, setToken] = useState(() => {
+    return localStorage.getItem("access_token");
+  });
 
-  useEffect(() => {
-    const storedToken = localStorage.getItem("access_token");
+  const [user, setUser] = useState(() => {
     const storedUser = localStorage.getItem("user");
-    const storedSurvey = localStorage.getItem("needs_survey");
-    if (storedToken) {
-      setToken(storedToken);
+    if (!storedUser) return null;
+    try {
+      return JSON.parse(storedUser);
+    } catch (e) {
+      console.warn("Failed to parse stored user:", e);
+      return null;
     }
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch (e) {
-        console.warn("Failed to parse stored user", e);
-      }
-    }
-    if (storedSurvey) {
-      setNeedsSurvey(storedSurvey === "true");
-    }
-  }, []);
+  });
 
+  const [needsSurvey, setNeedsSurvey] = useState(() => {
+    const storedSurvey = localStorage.getItem("needs_survey");
+    return storedSurvey === "true";
+  });
+
+  // ─────────────────────────────────
+  // 2) 로그인: 토큰/유저/설문여부 저장 + localStorage 동기화
+  // ─────────────────────────────────
   const login = useCallback((newToken, userInfo, requiresSurvey = false) => {
     setToken(newToken);
     setUser(userInfo);
     setNeedsSurvey(requiresSurvey);
+
     localStorage.setItem("access_token", newToken);
     localStorage.setItem("user", JSON.stringify(userInfo));
     localStorage.setItem("needs_survey", String(requiresSurvey));
   }, []);
 
+  // ─────────────────────────────────
+  // 3) 로그아웃: 상태/스토리지 모두 초기화
+  // ─────────────────────────────────
   const logout = useCallback(() => {
     setToken(null);
     setUser(null);
     setNeedsSurvey(false);
+
     localStorage.removeItem("access_token");
     localStorage.removeItem("user");
     localStorage.removeItem("needs_survey");
   }, []);
 
-  const completeSurvey = useCallback((profile = {}) => {
+  // ─────────────────────────────────
+  // 4) 설문 완료 처리
+  // ─────────────────────────────────
+  const completeSurvey = useCallback(() => {
     setNeedsSurvey(false);
-    setUser((prev) => {
-      const nextUser = prev ? { ...prev, ...profile } : { ...profile };
-      localStorage.setItem("user", JSON.stringify(nextUser));
-      return nextUser;
-    });
     localStorage.setItem("needs_survey", "false");
   }, []);
 
-  const updateUserProfile = useCallback((profile = {}) => {
+  // ─────────────────────────────────
+  // 5) 프로필 일부 수정 (마이페이지에서 사용)
+  // ─────────────────────────────────
+  const updateUserProfile = useCallback((partialProfile) => {
     setUser((prev) => {
-      const nextUser = prev ? { ...prev, ...profile } : { ...profile };
-      localStorage.setItem("user", JSON.stringify(nextUser));
-      return nextUser;
+      if (!prev) return prev;
+      const next = { ...prev, ...partialProfile };
+      localStorage.setItem("user", JSON.stringify(next));
+      return next;
     });
   }, []);
 

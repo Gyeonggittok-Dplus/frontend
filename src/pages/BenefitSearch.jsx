@@ -127,9 +127,7 @@ export default function BenefitSearch() {
             거주 지역에 맞는 모든 복지 목록을 스크롤로 살펴보고, 관심 혜택을
             저장해 보세요.
           </p>
-          <p className="mt-2 text-xs text-slate-400">
-            현재 지역 기준: {currentRegionLabel || "미선택"}
-          </p>
+          
         </div>
       </header>
 

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { MapPin, Navigation, PhoneCall } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
-const FILTERS = ["전체", "내 지역"];
+const FILTERS = ["내 지역"];
 const DEFAULT_CENTER = { lat: 37.3854, lng: 127.1155 };
 const KAKAO_SCRIPT_ID = "kakao-map-sdk";
 
@@ -128,11 +128,18 @@ export default function MapView() {
                 "",
             };
           });
+          const seen = new Set();
+          const deduped = normalized.filter((spot) => {
+            const key = `${spot.name}|${spot.address}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
 
-          const sorted = normalized.sort((a, b) =>
-            a.name.localeCompare(b.name, "ko")
-          );
-          setSpots(sorted);
+          const sorted = deduped.sort((a, b) =>
+              a.name.localeCompare(b.name, "ko")
+            );
+            setSpots(sorted);
           setSelected(sorted[0] ?? null);
           setUserRegion(payload?.user_location || user?.location || "");
           setError("");
@@ -309,20 +316,7 @@ export default function MapView() {
                   <Navigation className="h-4 w-4" />
                   길찾기 열기
                 </button>
-                {hasValidUrl(selected.url) ? (
-                  <a
-                    href={normalizeUrl(selected.url)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs font-semibold text-[#00a69c] underline underline-offset-4"
-                  >
-                    홈페이지 바로가기
-                  </a>
-                ) : (
-                  <p className="text-xs text-slate-400">
-                    홈페이지 정보가 없습니다.
-                  </p>
-                )}
+                
               </div>
             </>
           ) : (
@@ -334,7 +328,7 @@ export default function MapView() {
           <div className="mt-8 max-h-[360px] space-y-3 overflow-y-auto pr-2">
             {filteredSpots.length === 0 ? (
               <p className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-400">
-                표시할 복지센터가 없습니다.
+                복지센터를 불러오는 중 입니다.
               </p>
             ) : (
               filteredSpots.map((spot) => (

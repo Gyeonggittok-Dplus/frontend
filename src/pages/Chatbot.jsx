@@ -3,16 +3,20 @@ import { Send } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 const SUGGESTIONS = [
-  "청년 맞춤 지원이 궁금해요",
-  "신청 일정 알려주세요",
+  "청년 맞춤 복지가 궁금해요",
+  "노인 맞춤 복지가 궁금해요",
   "가까운 복지센터는 어디 있나요?",
 ];
 
 export default function Chatbot() {
   const { user } = useAuth();
-  const [messages, setMessages] = useState([
-    { sender: "bot", text: "안녕하세요, 경기D+ 챗봇입니다. 어떤 복지 혜택이 궁금하신가요?" },
-  ]);
+  const [messages, setMessages] = useState(() => {
+    const saved = sessionStorage.getItem("chat_history");
+    if (saved) return JSON.parse(saved);
+    return [
+      { sender: "bot", text: "안녕하세요, 경기D+ 챗봇입니다. 어떤 복지 혜택이 궁금하신가요?" }
+    ];
+  });
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [sessionId, setSessionId] = useState(null);
@@ -75,10 +79,8 @@ export default function Chatbot() {
   };
 
   useEffect(() => {
-    if (messageContainerRef.current) {
-      messageContainerRef.current.scrollTop = messageContainerRef.current.scrollHeight;
-    }
-  }, [messages, loading]);
+    sessionStorage.setItem("chat_history", JSON.stringify(messages));
+  }, [messages]);
 
   return (
     <section className="mx-auto flex h-[calc(100vh-260px)] max-w-3xl flex-col rounded-3xl bg-white shadow-sm sm:h-[calc(100vh-220px)] lg:h-[calc(100vh-180px)]">
@@ -109,7 +111,7 @@ export default function Chatbot() {
             className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
           >
             <div
-              className={`max-w-[70%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+              className={`max-w-[70%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-line ${
                 message.sender === "user"
                   ? "bg-[#00a69c] text-white"
                   : "bg-slate-100 text-slate-900"
