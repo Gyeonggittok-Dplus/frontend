@@ -250,8 +250,7 @@ export default function MapView() {
           </div>
           <div className="inline-flex flex-wrap gap-2 rounded-2xl bg-white/10 px-4 py-2 text-xs uppercase tracking-[0.2em]">
             <span>{derivedRegion || "지역 미설정"}</span>
-            <span>|</span>
-            <span>{user?.name ? `${user.name} 님` : "사용자 미확인"}</span>
+            
           </div>
         </div>
         <div className="mt-4 flex gap-2">
